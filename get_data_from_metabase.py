@@ -61,6 +61,7 @@ def __create_table_in_duckdb(conn):
 def __insert_data_if_needed(conn, csv_path='dados.csv'):
     try:
         last_processing_date = conn.execute("SELECT MAX(\"Data do Processamento\") FROM pnp_data").fetchdf().values[0][0]
+
         if last_processing_date != pd.to_datetime('today').date():
             conn.execute(f"""
             INSERT INTO pnp_data
@@ -72,7 +73,7 @@ def __insert_data_if_needed(conn, csv_path='dados.csv'):
 def run_pipeline():
     try:
         # Get data from Metabase and save it to a CSV file
-        # __get_data_from_metabase()
+        __get_data_from_metabase()
         __get_data_from_csv()
 
         # Create a connection to the database

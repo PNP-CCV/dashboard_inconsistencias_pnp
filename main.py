@@ -15,7 +15,7 @@ def create_connection(db_path='db.duckdb'):
 def query_data(conn):
     try:
         df = conn.execute("""
-            SELECT * FROM pnp_data WHERE "Data do Processamento" = (SELECT MAX("Data do Processamento") FROM pnp_data)
+            SELECT * FROM pnp_data
         """).fetchdf()
         return df
     except Exception as e:
@@ -97,7 +97,7 @@ def main():
         escopos = df['Escopo da Inconsistência'].unique().tolist()
 
     # Show the filtered data if all filter is selected
-    if instituicoes and unidades and escopos:
+    if data_processamento and instituicoes and unidades and escopos:
         filtered_data = df_grouped[
             df_grouped['Instituição'].isin(instituicoes) &
             df_grouped['Unidade'].isin(unidades) &
