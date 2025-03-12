@@ -1,9 +1,6 @@
 import streamlit as st
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
 import duckdb
-from datetime import date
 
 # Function to create a connection to the database
 def create_connection(db_path='db.duckdb'):
@@ -13,34 +10,6 @@ def create_connection(db_path='db.duckdb'):
     except Exception as e:
         st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
-
-# Function to create the table if it does not exist
-def create_table(conn):
-    try:
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS pnp_data (
-            "Instituição" VARCHAR,
-            "Unidade" VARCHAR,
-            "Escopo da Inconsistência" VARCHAR,
-            "Situação da Inconsistência" VARCHAR,
-            "Total de Inconsistências" INTEGER,
-            "Data do Processamento" DATE
-        )
-        """)
-    except Exception as e:
-        st.error(f"Erro ao criar a tabela: {e}")
-
-# Function to insert data into the table from a CSV file
-def insert_data_if_needed(conn, csv_path='dados.csv'):
-    try:
-        last_processing_date = conn.execute("SELECT MAX(\"Data do Processamento\") FROM pnp_data").fetchdf().values[0][0]
-        if last_processing_date != pd.to_datetime('today').date():
-            conn.execute(f"""
-            INSERT INTO pnp_data
-                SELECT *, current_date as "Data do Processamento" FROM read_csv('{csv_path}');
-            """)
-    except Exception as e:
-        st.error(f"Erro ao inserir dados: {e}")
 
 # Function to query the data for the last processing date
 def query_data(conn):
@@ -78,8 +47,6 @@ def main():
     if conn is None:
         return
 
-    create_table(conn)
-    insert_data_if_needed(conn)
     df = query_data(conn)
     df_grouped = process_data(df)
     close_connection(conn)
