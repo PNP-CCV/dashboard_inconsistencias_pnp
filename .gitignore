@@ -1,5 +1,5 @@
 .venv/
 .env
-db.duckdb
+#db.duckdb
 data/*.csv
 !data/.gitkeep

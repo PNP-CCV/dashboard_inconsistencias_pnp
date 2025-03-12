@@ -20,11 +20,11 @@ services:
   #   environment:
   #     configuration: |
   #       schedule:
-  #         - cron: 57 14 * * *
-  #           task: hello
+  #         - cron: 0 17 15 * * * # every day at 00:05
+  #           task: get_data
   #       tasks:
   #         docker:
-  #           - name: hello
+  #           - name: get_data
   #             image: python:3.9-slim
   #             script:
   #               - pip3 install -r requirements.txt

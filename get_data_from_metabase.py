@@ -71,9 +71,8 @@ def __insert_data_if_needed(conn, csv_path='dados.csv'):
 
 def run_pipeline():
     try:
-        
         # Get data from Metabase and save it to a CSV file
-        __get_data_from_metabase()
+        # __get_data_from_metabase()
         __get_data_from_csv()
 
         # Create a connection to the database
