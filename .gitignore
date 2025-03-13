@@ -3,3 +3,4 @@
 #db.duckdb
 data/*.csv
 !data/.gitkeep
+.streamlit/secrets.toml

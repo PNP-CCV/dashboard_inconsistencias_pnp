@@ -2,6 +2,7 @@ from datetime import datetime
 import requests
 import pandas as pd
 import duckdb
+import os
 
 METABASE_URL = 'https://novopnp-mb.mec.gov.br'
 
@@ -9,7 +10,7 @@ def __get_data_from_metabase():
     try:
         headers = {
             'Content-Type': 'application/json',
-            'x-api-key': 'mb_stL9qu/yE8NcP4YbyrSBDdUSoJzzpBL/tV7ny8c7YZE='
+            'x-api-key': os.environ.get('METABASE_API_KEY')
         }
         response = requests.post(f"{METABASE_URL}/api/card/71/query/csv", headers=headers)
         if response.status_code == 200:
