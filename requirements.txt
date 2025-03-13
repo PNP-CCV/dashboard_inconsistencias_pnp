@@ -4,3 +4,4 @@ seaborn
 duckdb
 requests
 plotly
+python-dotenv

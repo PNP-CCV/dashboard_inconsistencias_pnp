@@ -4,6 +4,9 @@ import pandas as pd
 import duckdb
 import os
 
+from dotenv import load_dotenv
+load_dotenv()
+
 METABASE_URL = 'https://novopnp-mb.mec.gov.br'
 
 def __get_data_from_metabase():
