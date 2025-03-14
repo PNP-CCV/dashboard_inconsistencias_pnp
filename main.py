@@ -339,14 +339,14 @@ def main():
     
     # Dict com as cores a serem usadas para cada tipo de inconsistência
     cores_por_tipo = {
-        'Inconsistente RA': '#660033',
-        'Alterado RA': '#cc3333',
-        'Validado RA': '#ff6666',
-        'Inconsistente PI': '#1a5599', 
-        'Alterado PI': '#3377bb', 
-        'Validado PI': '#66aadd', 
-        'Alterado RE': '#66cc77', 
-        'Validado RE': '#228833'   
+        'Inconsistente RA': 'red',
+        'Alterado RA': 'yellow',  # Amarelo
+        'Validado RA': 'lightgreen',  # Verde Mais Claro
+        'Inconsistente PI': 'lightcoral',  # Vermelho Mais Claro do que o Inconsistente RA
+        'Alterado PI': 'gold',  # Amarelo mais Escuro do que Alterado RA
+        'Validado PI': 'forestgreen',  # Verde Mais escuro do Que o Validado RA
+        'Alterado RE': 'darkgoldenrod',  # Amarelo mais Escuro do que o Alterado PI
+        'Validado RE': 'darkgreen'  # Verde mais escuro do que o Validado PI
     }
     
     # Criar abas para diferentes escopos de inconsistência
