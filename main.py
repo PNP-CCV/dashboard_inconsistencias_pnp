@@ -46,7 +46,7 @@ def close_connection(conn):
         st.error(f"Erro ao fechar a conexão: {e}")
 
 # Function to create timeline chart
-def create_timeline_chart(data, escopo_filter=None, instituicao_filter=None, unidade_filter=None):
+def create_timeline_chart(data, colors, escopo_filter=None, instituicao_filter=None, unidade_filter=None):
     if data.empty:
         return go.Figure()
     
@@ -76,15 +76,8 @@ def create_timeline_chart(data, escopo_filter=None, instituicao_filter=None, uni
     # Criar gráfico de linha
     fig = go.Figure()
     
-    # Cores para cada situação
-    colors = {
-        'Pendente': '#FF7F7F',  # Vermelho claro
-        'Validado RA': '#FFC04D',  # Amarelo/laranja
-        'Validado PI': '#7FBF7F'   # Verde
-    }
-    
     # Adicionar uma linha para cada situação
-    for situacao in ['Pendente', 'Validado RA', 'Validado PI']:
+    for situacao in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
         situacao_data = timeline_df[timeline_df['Situação da Inconsistência'] == situacao]
         if not situacao_data.empty:
             fig.add_trace(go.Scatter(
@@ -127,7 +120,7 @@ def create_timeline_chart(data, escopo_filter=None, instituicao_filter=None, uni
     return fig
 
 # Function to create progress chart
-def create_progress_chart(data, entity_type, escopo_filter=None):
+def create_progress_chart(data, entity_type, colors, escopo_filter=None):
     if data.empty:
         return go.Figure()
     
@@ -147,56 +140,42 @@ def create_progress_chart(data, entity_type, escopo_filter=None):
     ).fillna(0).reset_index()
     
     # Garante que todas as colunas existam
-    for col in ['Pendente', 'Validado RA', 'Validado PI']:
+    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
         if col not in pivot_df.columns:
             pivot_df[col] = 0
             
     # Calcula o total e o percentual de cada situação
-    pivot_df['Total'] = pivot_df['Pendente'] + pivot_df['Validado RA'] + pivot_df['Validado PI']
-    pivot_df['% Pendente'] = (pivot_df['Pendente'] / pivot_df['Total'] * 100).round(1)
+    pivot_df['Total'] = pivot_df['Inconsistente RA'] + pivot_df['Alterado RA'] + pivot_df['Validado RA'] + pivot_df['Inconsistente PI'] + pivot_df['Alterado PI'] + pivot_df['Validado PI'] + pivot_df['Alterado RE'] + pivot_df['Validado RE']
+    pivot_df['% Inconsistente RA'] = (pivot_df['Inconsistente RA'] / pivot_df['Total'] * 100).round(1)
+    pivot_df['% Alterado RA'] = (pivot_df['Alterado RA'] / pivot_df['Total'] * 100).round(1)
     pivot_df['% Validado RA'] = (pivot_df['Validado RA'] / pivot_df['Total'] * 100).round(1)
+    pivot_df['% Inconsistente PI'] = (pivot_df['Inconsistente PI'] / pivot_df['Total'] * 100).round(1)
+    pivot_df['% Alterado PI'] = (pivot_df['Alterado PI'] / pivot_df['Total'] * 100).round(1)
     pivot_df['% Validado PI'] = (pivot_df['Validado PI'] / pivot_df['Total'] * 100).round(1)
-    
+    pivot_df['% Alterado RE'] = (pivot_df['Alterado RE'] / pivot_df['Total'] * 100).round(1)
+    pivot_df['% Validado RE'] = (pivot_df['Validado RE'] / pivot_df['Total'] * 100).round(1)
+        
     # Ordena por total (maior para o menor)
     pivot_df = pivot_df.sort_values('Total', ascending=False)
     
     # Cria gráfico de barras horizontais empilhadas
     fig = go.Figure()
     
-    # Adiciona barras para cada situação com cores específicas
-    fig.add_trace(go.Bar(
+    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
+
+        fig.add_trace(go.Bar(
         y=pivot_df[entity_type],
-        x=pivot_df['% Pendente'],
-        name='Pendente',
+        x=pivot_df[f'% {col}'],
+        name=col,
         orientation='h',
-        marker=dict(color='#FF7F7F'),  # Vermelho claro
-        text=pivot_df['% Pendente'].apply(lambda x: f"{x}%" if x > 5 else ""),
+        marker=dict(color=colors[col]),
+        text=pivot_df['% ' + col].apply(lambda x: f"{x}%" if x > 5 else ""),
         textposition='auto',
-        hovertemplate="Pendente: %{x:.1f}%<extra></extra>"
+        hovertemplate=col + ": %{x:.1f}%<extra></extra>"
     ))
-    
-    fig.add_trace(go.Bar(
-        y=pivot_df[entity_type],
-        x=pivot_df['% Validado RA'],
-        name='Validado RA',
-        orientation='h',
-        marker=dict(color='#FFC04D'),  # Amarelo/laranja
-        text=pivot_df['% Validado RA'].apply(lambda x: f"{x}%" if x > 5 else ""),
-        textposition='auto',
-        hovertemplate="Validado RA: %{x:.1f}%<extra></extra>"
-    ))
-    
-    fig.add_trace(go.Bar(
-        y=pivot_df[entity_type],
-        x=pivot_df['% Validado PI'],
-        name='Validado PI',
-        orientation='h',
-        marker=dict(color='#7FBF7F'),  # Verde
-        text=pivot_df['% Validado PI'].apply(lambda x: f"{x}%" if x > 5 else ""),
-        textposition='auto',
-        hovertemplate="Validado PI: %{x:.1f}%<extra></extra>"
-    ))
-    
+
+   
+
     # Título específico baseado no filtro de escopo
     title = f"Progresso por {entity_type}"
     if escopo_filter:
@@ -233,18 +212,26 @@ def create_summary_cards(data, escopo_filter=None):
     if data.empty:
         return
     
-    total_pendente = data[data['Situação da Inconsistência'] == 'Pendente']['Total de Inconsistências'].sum()
+    total_inconsistente_ra = data[data['Situação da Inconsistência'] == 'Inconsistente RA']['Total de Inconsistências'].sum()
+    total_alterado_ra = data[data['Situação da Inconsistência'] == 'Alterado RA']['Total de Inconsistências'].sum()
     total_validado_ra = data[data['Situação da Inconsistência'] == 'Validado RA']['Total de Inconsistências'].sum()
+    total_inconsistente_pi = data[data['Situação da Inconsistência'] == 'Inconsistente PI']['Total de Inconsistências'].sum()
+    total_alterado_pi = data[data['Situação da Inconsistência'] == 'Alterado PI']['Total de Inconsistências'].sum()
     total_validado_pi = data[data['Situação da Inconsistência'] == 'Validado PI']['Total de Inconsistências'].sum()
-    total_geral = total_pendente + total_validado_ra + total_validado_pi
+    total_validado_re = data[data['Situação da Inconsistência'] == 'Validado RE']['Total de Inconsistências'].sum()
+    total_geral = total_alterado_ra + total_inconsistente_ra + total_alterado_pi + total_validado_re + total_validado_ra + total_validado_pi
     
     # Cálculo de percentuais
-    pct_pendente = (total_pendente / total_geral * 100) if total_geral > 0 else 0
+    pct_inconsistente_ra = (total_inconsistente_ra / total_geral * 100) if total_geral > 0 else 0
+    pct_alterado_ra = (total_alterado_ra / total_geral * 100) if total_geral > 0 else 0
     pct_validado_ra = (total_validado_ra / total_geral * 100) if total_geral > 0 else 0
+    pct_inconsistente_pi = (total_inconsistente_pi / total_geral * 100) if total_geral > 0 else 0
+    pct_alterado_pi = (total_alterado_pi / total_geral * 100) if total_geral > 0 else 0
     pct_validado_pi = (total_validado_pi / total_geral * 100) if total_geral > 0 else 0
+    pct_validado_re = (total_validado_re / total_geral * 100) if total_geral > 0 else 0
     
     # Cria colunas para os cards
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
     
     titulo = "Total de Inconsistências"
     if escopo_filter:
@@ -254,13 +241,25 @@ def create_summary_cards(data, escopo_filter=None):
         st.metric(titulo, f"{total_geral:,}".replace(",", "."))
     
     with col2:
-        st.metric("Pendentes", f"{total_pendente:,}".replace(",", "."), f"{pct_pendente:.1f}%", delta_color="inverse")
+        st.metric("Inconsistente RA", f"{total_inconsistente_ra:,}".replace(",", "."), f"{pct_inconsistente_ra:.1f}%", delta_color="inverse")
         
     with col3:
+        st.metric("Alterado RA", f"{total_alterado_ra:,}".replace(",", "."), f"{pct_alterado_ra:.1f}%")
+
+    with col4:
         st.metric("Validado RA", f"{total_validado_ra:,}".replace(",", "."), f"{pct_validado_ra:.1f}%")
         
-    with col4:
+    with col5:
+        st.metric("Inconsistente PI", f"{total_inconsistente_pi:,}".replace(",", "."), f"{pct_inconsistente_pi:.1f}%", delta_color="inverse")
+    
+    with col6:
+        st.metric("Alterado PI", f"{total_alterado_pi:,}".replace(",", "."), f"{pct_alterado_pi:.1f}%")
+    
+    with col7:
         st.metric("Validado PI", f"{total_validado_pi:,}".replace(",", "."), f"{pct_validado_pi:.1f}%")
+    
+    with col8:
+        st.metric("Validado RE", f"{total_validado_re:,}".replace(",", "."), f"{pct_validado_re:.1f}%")
 
 # Main function
 def main():
@@ -334,6 +333,18 @@ def main():
         st.warning("Não há dados para a combinação de filtros selecionada.")
         return
     
+    # Dict com as cores a serem usadas para cada tipo de inconsistência
+    colors = {
+        'Inconsistente RA': '#660033',
+        'Alterado RA': '#cc3333',
+        'Validado RA': '#ff6666',
+        'Inconsistente PI': '#1a5599', 
+        'Alterado PI': '#3377bb', 
+        'Validado PI': '#66aadd', 
+        'Alterado RE': '#66cc77', 
+        'Validado RE': '#228833'   
+    }
+    
     # Criar abas para diferentes escopos de inconsistência
     tabs = st.tabs(["Visão Geral"] + escopos)
     
@@ -344,18 +355,18 @@ def main():
         
         # Gráfico de linha do tempo para acompanhar a evolução
         st.write("## Evolução das Inconsistências")
-        fig_timeline = create_timeline_chart(filtered_data)
+        fig_timeline = create_timeline_chart(filtered_data, colors)
         st.plotly_chart(fig_timeline, use_container_width=True)
         
         # Visualização gráfica do progresso por instituição
         st.write("## Progresso por Instituição")
-        fig_instituicao = create_progress_chart(filtered_data, 'Instituição')
+        fig_instituicao = create_progress_chart(filtered_data, 'Instituição', colors)
         st.plotly_chart(fig_instituicao, use_container_width=True)
         
         # Se apenas uma instituição estiver selecionada, mostrar progresso por unidade
         if len(instituicoes_selecionadas) == 1:
             st.write("## Progresso por Unidade")
-            fig_unidade = create_progress_chart(filtered_data, 'Unidade')
+            fig_unidade = create_progress_chart(filtered_data, 'Unidade', colors)
             st.plotly_chart(fig_unidade, use_container_width=True)
         
         # Mostrar tabela detalhada
@@ -379,24 +390,24 @@ def main():
             
             # Gráfico de linha do tempo específico para este escopo
             st.write(f"## Evolução das Inconsistências - {escopo}")
-            fig_timeline_escopo = create_timeline_chart(filtered_data, escopo)
+            fig_timeline_escopo = create_timeline_chart(filtered_data, colors, escopo)
             st.plotly_chart(fig_timeline_escopo, use_container_width=True)
             
             # Visualização gráfica do progresso por instituição para este escopo
             st.write(f"## Progresso por Instituição - {escopo}")
-            fig_instituicao = create_progress_chart(filtered_data, 'Instituição', escopo)
+            fig_instituicao = create_progress_chart(filtered_data, 'Instituição', colors, escopo)
             st.plotly_chart(fig_instituicao, use_container_width=True)
             
             # Se apenas uma instituição estiver selecionada, mostrar progresso por unidade para este escopo
             if len(instituicoes_selecionadas) == 1:
                 st.write(f"## Progresso por Unidade - {escopo}")
-                fig_unidade = create_progress_chart(filtered_data, 'Unidade', escopo)
+                fig_unidade = create_progress_chart(filtered_data, 'Unidade', colors, escopo)
                 st.plotly_chart(fig_unidade, use_container_width=True)
                 
                 # Se uma instituição e uma unidade estiverem selecionadas, mostrar gráfico de linha do tempo específico
                 if len(unidades_selecionadas) == 1 and unidades_selecionadas[0] != 'Todos':
                     st.write(f"## Evolução na {unidades_selecionadas[0]} - {escopo}")
-                    fig_timeline_unidade = create_timeline_chart(filtered_data, escopo, 
+                    fig_timeline_unidade = create_timeline_chart(filtered_data, colors, escopo, 
                                                                instituicoes_selecionadas[0], unidades_selecionadas[0])
                     st.plotly_chart(fig_timeline_unidade, use_container_width=True)
             
