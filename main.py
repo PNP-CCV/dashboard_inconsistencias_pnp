@@ -1,4 +1,5 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
 import duckdb
 import plotly.express as px
@@ -124,6 +125,9 @@ def create_progress_chart(data, entity_type, cores_por_tipo, escopo_filter=None)
     if data.empty:
         return go.Figure()
     
+    # Usar dados somente do último processamento
+    data = data[data['Data do Processamento'] == data['Data do Processamento'].max()]
+    
     # Filtra por escopo se especificado
     if escopo_filter:
         data = data[data['Escopo da Inconsistência'] == escopo_filter]
@@ -140,29 +144,23 @@ def create_progress_chart(data, entity_type, cores_por_tipo, escopo_filter=None)
     ).fillna(0).reset_index()
     
     # Garante que todas as colunas existam
-    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
+    for col in list(cores_por_tipo.keys()):
         if col not in pivot_df.columns:
             pivot_df[col] = 0
             
     # Calcula o total e o percentual de cada situação
-    pivot_df['Total'] = pivot_df['Inconsistente RA'] + pivot_df['Alterado RA'] + pivot_df['Validado RA'] + pivot_df['Inconsistente PI'] + pivot_df['Alterado PI'] + pivot_df['Validado PI'] + pivot_df['Alterado RE'] + pivot_df['Validado RE']
-    pivot_df['% Inconsistente RA'] = (pivot_df['Inconsistente RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado RA'] = (pivot_df['Alterado RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado RA'] = (pivot_df['Validado RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Inconsistente PI'] = (pivot_df['Inconsistente PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado PI'] = (pivot_df['Alterado PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado PI'] = (pivot_df['Validado PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado RE'] = (pivot_df['Alterado RE'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado RE'] = (pivot_df['Validado RE'] / pivot_df['Total'] * 100).round(1)
-        
+    pivot_df['Total'] = pivot_df[[col for col in list(cores_por_tipo.keys())]].sum(axis=1)
+    for tipo in cores_por_tipo.keys():
+        pivot_df['% ' + tipo] = (pivot_df[tipo]/pivot_df['Total'] * 100).round(1)
+    
+   
     # Ordena por total (maior para o menor)
     pivot_df = pivot_df.sort_values('Total', ascending=False)
     
     # Cria gráfico de barras horizontais empilhadas
     fig = go.Figure()
     
-    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
-
+    for col in cores_por_tipo.keys():
         fig.add_trace(go.Bar(
         y=pivot_df[entity_type],
         x=pivot_df[f'% {col}'],
@@ -212,38 +210,59 @@ def create_summary_cards(data, tipos_inconsistencia, escopo_filter=None):
     if data.empty:
         return
     
-    # Cálculo de totais
-    totais_por_tipo = data.groupby('Situação da Inconsistência')['Total de Inconsistências'].sum()
-       
-    # Cálculo de percentuais
-    pct_por_tipo = totais_por_tipo / totais_por_tipo.sum() * 100 
 
+    dados_ultimo_processamento = data[data['Data do Processamento'] == data['Data do Processamento'].max()]
+    dados_penultimo_processamento = data[data['Data do Processamento'] == data['Data do Processamento'].unique()[-2]]
+
+    # Cálculo de totais por tipo de inconsistência no último processamento
+    totais_ultimo_processamento = dados_ultimo_processamento.groupby('Situação da Inconsistência')['Total de Inconsistências'].sum()
+    # Garantir que todos os tipos de inconsistencia estejam presentes
+    for tipo in tipos_inconsistencia:
+        if tipo not in totais_ultimo_processamento.index:
+            totais_ultimo_processamento[tipo] = 0
+
+    # Cálculo de totais por tipo de inconsistência no penúltimo processamento
+    totais_penultimo_processamento = dados_penultimo_processamento.groupby('Situação da Inconsistência')['Total de Inconsistências'].sum()
+    # Garantir que todos os tipos de inconsistencia estejam presentes
+    for tipo in tipos_inconsistencia:
+        if tipo not in totais_penultimo_processamento.index:
+            totais_penultimo_processamento[tipo] = 0
+
+    # Cálculo de percentuais
+    evolucao_pct = (totais_ultimo_processamento - totais_penultimo_processamento) / totais_penultimo_processamento * 100
+    # Replace infinity values with a string flag
+    evolucao_pct.fillna('nan', inplace=True)
+    evolucao_pct.replace(np.inf, 'nan', inplace=True)
+    evolucao_pct.replace(-np.inf, 'nan', inplace=True)
+    
+
+    
     # Linha 1: Total
     titulo = "Total de Inconsistências"
     if escopo_filter:
         titulo += f" ({escopo_filter})"
     _, col_total, _ = st.columns(3)
     with col_total:
-        st.metric(titulo, f"{totais_por_tipo.sum():,}".replace(",", "."))
+        st.metric(titulo, f"{totais_ultimo_processamento.sum():,}".replace(",", "."))
       
     # Linha 2: Totais dos primeiros 4 tipo2
     row1col1, row1col2, row1col3, row1col4 = st.columns(4)
     row1_delta_color = ['inverse', 'normal', 'normal', 'normal']
     for tipo, cell, delta_color in zip(tipos_inconsistencia[:4], [row1col1, row1col2, row1col3, row1col4], row1_delta_color):
-        with cell:
-            st.metric(tipo, f"{totais_por_tipo.loc[tipo]:,}".replace(",", "."), 
-                      f"{pct_por_tipo.loc[tipo]:.1f}%", 
-                      delta_color=delta_color)
+        display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color)
     
     #Linha 3: Totais dos últimos 4 tipos
     row2col1, row2col2, row2col3, row2col4 = st.columns(4)
     row2_delta_color = ['normal', 'normal', 'normal', 'normal']
     for tipo, cell, delta_color in zip(tipos_inconsistencia[4:], [row2col1, row2col2, row2col3, row2col4], row2_delta_color):
-        with cell:
-            st.metric(tipo, f"{totais_por_tipo.loc[tipo]:,}".replace(",", "."), 
-                      f"{pct_por_tipo.loc[tipo]:.1f}%",
-                      delta_color=delta_color)
-    
+        display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color)
+
+# Função para exibir cada card
+def display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color):
+    with cell:
+        st.metric(tipo, f"{totais_ultimo_processamento.loc[tipo]:,}".replace(",", "."), 
+                  f"{evolucao_pct.loc[tipo]:.1f}%" if evolucao_pct.loc[tipo] != 'nan' else '-', 
+                  delta_color=delta_color if evolucao_pct.loc[tipo] != 'nan' else 'off')    
 
 
 # Main function
@@ -371,7 +390,7 @@ def main():
                 st.info(f"Não há dados para o escopo {escopo} com os filtros selecionados.")
                 continue
                 
-            create_summary_cards(filtered_data, escopo)
+            create_summary_cards(filtered_data, list(cores_por_tipo.keys()), escopo)
             
             # Gráfico de linha do tempo específico para este escopo
             st.write(f"## Evolução das Inconsistências - {escopo}")
