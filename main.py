@@ -1,4 +1,5 @@
 import streamlit as st
+import numpy as np
 import pandas as pd
 import duckdb
 import plotly.express as px
@@ -46,7 +47,7 @@ def close_connection(conn):
         st.error(f"Erro ao fechar a conexão: {e}")
 
 # Function to create timeline chart
-def create_timeline_chart(data, colors, escopo_filter=None, instituicao_filter=None, unidade_filter=None):
+def create_timeline_chart(data, cores_por_tipo, escopo_filter=None, instituicao_filter=None, unidade_filter=None):
     if data.empty:
         return go.Figure()
     
@@ -77,7 +78,7 @@ def create_timeline_chart(data, colors, escopo_filter=None, instituicao_filter=N
     fig = go.Figure()
     
     # Adicionar uma linha para cada situação
-    for situacao in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
+    for situacao in list(cores_por_tipo.keys()):
         situacao_data = timeline_df[timeline_df['Situação da Inconsistência'] == situacao]
         if not situacao_data.empty:
             fig.add_trace(go.Scatter(
@@ -85,7 +86,7 @@ def create_timeline_chart(data, colors, escopo_filter=None, instituicao_filter=N
                 y=situacao_data['Total de Inconsistências'],
                 mode='lines+markers',
                 name=situacao,
-                line=dict(color=colors.get(situacao)),
+                line=dict(color=cores_por_tipo.get(situacao)),
                 hovertemplate='%{y:,.0f} inconsistências<br>%{x|%d/%m/%Y}<extra></extra>'
             ))
     
@@ -120,9 +121,12 @@ def create_timeline_chart(data, colors, escopo_filter=None, instituicao_filter=N
     return fig
 
 # Function to create progress chart
-def create_progress_chart(data, entity_type, colors, escopo_filter=None):
+def create_progress_chart(data, entity_type, cores_por_tipo, escopo_filter=None):
     if data.empty:
         return go.Figure()
+    
+    # Usar dados somente do último processamento
+    data = data[data['Data do Processamento'] == data['Data do Processamento'].max()]
     
     # Filtra por escopo se especificado
     if escopo_filter:
@@ -140,35 +144,29 @@ def create_progress_chart(data, entity_type, colors, escopo_filter=None):
     ).fillna(0).reset_index()
     
     # Garante que todas as colunas existam
-    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
+    for col in list(cores_por_tipo.keys()):
         if col not in pivot_df.columns:
             pivot_df[col] = 0
             
     # Calcula o total e o percentual de cada situação
-    pivot_df['Total'] = pivot_df['Inconsistente RA'] + pivot_df['Alterado RA'] + pivot_df['Validado RA'] + pivot_df['Inconsistente PI'] + pivot_df['Alterado PI'] + pivot_df['Validado PI'] + pivot_df['Alterado RE'] + pivot_df['Validado RE']
-    pivot_df['% Inconsistente RA'] = (pivot_df['Inconsistente RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado RA'] = (pivot_df['Alterado RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado RA'] = (pivot_df['Validado RA'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Inconsistente PI'] = (pivot_df['Inconsistente PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado PI'] = (pivot_df['Alterado PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado PI'] = (pivot_df['Validado PI'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Alterado RE'] = (pivot_df['Alterado RE'] / pivot_df['Total'] * 100).round(1)
-    pivot_df['% Validado RE'] = (pivot_df['Validado RE'] / pivot_df['Total'] * 100).round(1)
-        
+    pivot_df['Total'] = pivot_df[[col for col in list(cores_por_tipo.keys())]].sum(axis=1)
+    for tipo in cores_por_tipo.keys():
+        pivot_df['% ' + tipo] = (pivot_df[tipo]/pivot_df['Total'] * 100).round(1)
+    
+   
     # Ordena por total (maior para o menor)
     pivot_df = pivot_df.sort_values('Total', ascending=False)
     
     # Cria gráfico de barras horizontais empilhadas
     fig = go.Figure()
     
-    for col in ['Inconsistente RA', 'Alterado RA', 'Validado RA', 'Inconsistente PI', 'Alterado PI', 'Validado PI', 'Alterado RE', 'Validado RE']:
-
+    for col in cores_por_tipo.keys():
         fig.add_trace(go.Bar(
         y=pivot_df[entity_type],
         x=pivot_df[f'% {col}'],
         name=col,
         orientation='h',
-        marker=dict(color=colors[col]),
+        marker=dict(color=cores_por_tipo[col]),
         text=pivot_df['% ' + col].apply(lambda x: f"{x}%" if x > 5 else ""),
         textposition='auto',
         hovertemplate=col + ": %{x:.1f}%<extra></extra>"
@@ -201,7 +199,7 @@ def create_progress_chart(data, entity_type, colors, escopo_filter=None):
     return fig
 
 # Function to create summary cards
-def create_summary_cards(data, escopo_filter=None):
+def create_summary_cards(data, tipos_inconsistencia, escopo_filter=None):
     if data.empty:
         return
     
@@ -212,54 +210,60 @@ def create_summary_cards(data, escopo_filter=None):
     if data.empty:
         return
     
-    total_inconsistente_ra = data[data['Situação da Inconsistência'] == 'Inconsistente RA']['Total de Inconsistências'].sum()
-    total_alterado_ra = data[data['Situação da Inconsistência'] == 'Alterado RA']['Total de Inconsistências'].sum()
-    total_validado_ra = data[data['Situação da Inconsistência'] == 'Validado RA']['Total de Inconsistências'].sum()
-    total_inconsistente_pi = data[data['Situação da Inconsistência'] == 'Inconsistente PI']['Total de Inconsistências'].sum()
-    total_alterado_pi = data[data['Situação da Inconsistência'] == 'Alterado PI']['Total de Inconsistências'].sum()
-    total_validado_pi = data[data['Situação da Inconsistência'] == 'Validado PI']['Total de Inconsistências'].sum()
-    total_validado_re = data[data['Situação da Inconsistência'] == 'Validado RE']['Total de Inconsistências'].sum()
-    total_geral = total_alterado_ra + total_inconsistente_ra + total_alterado_pi + total_validado_re + total_validado_ra + total_validado_pi
-    
+
+    dados_ultimo_processamento = data[data['Data do Processamento'] == data['Data do Processamento'].max()]
+    dados_penultimo_processamento = data[data['Data do Processamento'] == data['Data do Processamento'].unique()[-2]]
+
+    # Cálculo de totais por tipo de inconsistência no último processamento
+    totais_ultimo_processamento = dados_ultimo_processamento.groupby('Situação da Inconsistência')['Total de Inconsistências'].sum()
+    # Garantir que todos os tipos de inconsistencia estejam presentes
+    for tipo in tipos_inconsistencia:
+        if tipo not in totais_ultimo_processamento.index:
+            totais_ultimo_processamento[tipo] = 0
+
+    # Cálculo de totais por tipo de inconsistência no penúltimo processamento
+    totais_penultimo_processamento = dados_penultimo_processamento.groupby('Situação da Inconsistência')['Total de Inconsistências'].sum()
+    # Garantir que todos os tipos de inconsistencia estejam presentes
+    for tipo in tipos_inconsistencia:
+        if tipo not in totais_penultimo_processamento.index:
+            totais_penultimo_processamento[tipo] = 0
+
     # Cálculo de percentuais
-    pct_inconsistente_ra = (total_inconsistente_ra / total_geral * 100) if total_geral > 0 else 0
-    pct_alterado_ra = (total_alterado_ra / total_geral * 100) if total_geral > 0 else 0
-    pct_validado_ra = (total_validado_ra / total_geral * 100) if total_geral > 0 else 0
-    pct_inconsistente_pi = (total_inconsistente_pi / total_geral * 100) if total_geral > 0 else 0
-    pct_alterado_pi = (total_alterado_pi / total_geral * 100) if total_geral > 0 else 0
-    pct_validado_pi = (total_validado_pi / total_geral * 100) if total_geral > 0 else 0
-    pct_validado_re = (total_validado_re / total_geral * 100) if total_geral > 0 else 0
+    evolucao_pct = (totais_ultimo_processamento - totais_penultimo_processamento) / totais_penultimo_processamento * 100
+    # Replace infinity values with a string flag
+    evolucao_pct.fillna('nan', inplace=True)
+    evolucao_pct.replace(np.inf, 'nan', inplace=True)
+    evolucao_pct.replace(-np.inf, 'nan', inplace=True)
     
-    # Cria colunas para os cards
-    col1, col2, col3, col4, col5, col6, col7, col8 = st.columns(8)
+
     
+    # Linha 1: Total
     titulo = "Total de Inconsistências"
     if escopo_filter:
         titulo += f" ({escopo_filter})"
+    _, col_total, _ = st.columns(3)
+    with col_total:
+        st.metric(titulo, f"{totais_ultimo_processamento.sum():,}".replace(",", "."))
+      
+    # Linha 2: Totais dos primeiros 4 tipo2
+    row1col1, row1col2, row1col3, row1col4 = st.columns(4)
+    row1_delta_color = ['inverse', 'normal', 'normal', 'normal']
+    for tipo, cell, delta_color in zip(tipos_inconsistencia[:4], [row1col1, row1col2, row1col3, row1col4], row1_delta_color):
+        display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color)
     
-    with col1:
-        st.metric(titulo, f"{total_geral:,}".replace(",", "."))
-    
-    with col2:
-        st.metric("Inconsistente RA", f"{total_inconsistente_ra:,}".replace(",", "."), f"{pct_inconsistente_ra:.1f}%", delta_color="inverse")
-        
-    with col3:
-        st.metric("Alterado RA", f"{total_alterado_ra:,}".replace(",", "."), f"{pct_alterado_ra:.1f}%")
+    #Linha 3: Totais dos últimos 4 tipos
+    row2col1, row2col2, row2col3, row2col4 = st.columns(4)
+    row2_delta_color = ['normal', 'normal', 'normal', 'normal']
+    for tipo, cell, delta_color in zip(tipos_inconsistencia[4:], [row2col1, row2col2, row2col3, row2col4], row2_delta_color):
+        display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color)
 
-    with col4:
-        st.metric("Validado RA", f"{total_validado_ra:,}".replace(",", "."), f"{pct_validado_ra:.1f}%")
-        
-    with col5:
-        st.metric("Inconsistente PI", f"{total_inconsistente_pi:,}".replace(",", "."), f"{pct_inconsistente_pi:.1f}%", delta_color="inverse")
-    
-    with col6:
-        st.metric("Alterado PI", f"{total_alterado_pi:,}".replace(",", "."), f"{pct_alterado_pi:.1f}%")
-    
-    with col7:
-        st.metric("Validado PI", f"{total_validado_pi:,}".replace(",", "."), f"{pct_validado_pi:.1f}%")
-    
-    with col8:
-        st.metric("Validado RE", f"{total_validado_re:,}".replace(",", "."), f"{pct_validado_re:.1f}%")
+# Função para exibir cada card
+def display_metric(tipo, totais_ultimo_processamento, evolucao_pct, cell, delta_color):
+    with cell:
+        st.metric(tipo, f"{totais_ultimo_processamento.loc[tipo]:,}".replace(",", "."), 
+                  f"{evolucao_pct.loc[tipo]:.1f}%" if evolucao_pct.loc[tipo] != 'nan' else '-', 
+                  delta_color=delta_color if evolucao_pct.loc[tipo] != 'nan' else 'off')    
+
 
 # Main function
 def main():
@@ -334,7 +338,7 @@ def main():
         return
     
     # Dict com as cores a serem usadas para cada tipo de inconsistência
-    colors = {
+    cores_por_tipo = {
         'Inconsistente RA': '#660033',
         'Alterado RA': '#cc3333',
         'Validado RA': '#ff6666',
@@ -351,22 +355,22 @@ def main():
     # Tab Visão Geral
     with tabs[0]:
         st.write("## Resumo Geral de Inconsistências")
-        create_summary_cards(filtered_data)
+        create_summary_cards(filtered_data, tipos_inconsistencia=list(cores_por_tipo.keys()))
         
         # Gráfico de linha do tempo para acompanhar a evolução
         st.write("## Evolução das Inconsistências")
-        fig_timeline = create_timeline_chart(filtered_data, colors)
+        fig_timeline = create_timeline_chart(filtered_data, cores_por_tipo)
         st.plotly_chart(fig_timeline, use_container_width=True)
         
         # Visualização gráfica do progresso por instituição
         st.write("## Progresso por Instituição")
-        fig_instituicao = create_progress_chart(filtered_data, 'Instituição', colors)
+        fig_instituicao = create_progress_chart(filtered_data, 'Instituição', cores_por_tipo)
         st.plotly_chart(fig_instituicao, use_container_width=True)
         
         # Se apenas uma instituição estiver selecionada, mostrar progresso por unidade
         if len(instituicoes_selecionadas) == 1:
             st.write("## Progresso por Unidade")
-            fig_unidade = create_progress_chart(filtered_data, 'Unidade', colors)
+            fig_unidade = create_progress_chart(filtered_data, 'Unidade', cores_por_tipo)
             st.plotly_chart(fig_unidade, use_container_width=True)
         
         # Mostrar tabela detalhada
@@ -386,28 +390,28 @@ def main():
                 st.info(f"Não há dados para o escopo {escopo} com os filtros selecionados.")
                 continue
                 
-            create_summary_cards(filtered_data, escopo)
+            create_summary_cards(filtered_data, list(cores_por_tipo.keys()), escopo)
             
             # Gráfico de linha do tempo específico para este escopo
             st.write(f"## Evolução das Inconsistências - {escopo}")
-            fig_timeline_escopo = create_timeline_chart(filtered_data, colors, escopo)
+            fig_timeline_escopo = create_timeline_chart(filtered_data, cores_por_tipo, escopo)
             st.plotly_chart(fig_timeline_escopo, use_container_width=True)
             
             # Visualização gráfica do progresso por instituição para este escopo
             st.write(f"## Progresso por Instituição - {escopo}")
-            fig_instituicao = create_progress_chart(filtered_data, 'Instituição', colors, escopo)
+            fig_instituicao = create_progress_chart(filtered_data, 'Instituição', cores_por_tipo, escopo)
             st.plotly_chart(fig_instituicao, use_container_width=True)
             
             # Se apenas uma instituição estiver selecionada, mostrar progresso por unidade para este escopo
             if len(instituicoes_selecionadas) == 1:
                 st.write(f"## Progresso por Unidade - {escopo}")
-                fig_unidade = create_progress_chart(filtered_data, 'Unidade', colors, escopo)
+                fig_unidade = create_progress_chart(filtered_data, 'Unidade', cores_por_tipo, escopo)
                 st.plotly_chart(fig_unidade, use_container_width=True)
                 
                 # Se uma instituição e uma unidade estiverem selecionadas, mostrar gráfico de linha do tempo específico
                 if len(unidades_selecionadas) == 1 and unidades_selecionadas[0] != 'Todos':
                     st.write(f"## Evolução na {unidades_selecionadas[0]} - {escopo}")
-                    fig_timeline_unidade = create_timeline_chart(filtered_data, colors, escopo, 
+                    fig_timeline_unidade = create_timeline_chart(filtered_data, cores_por_tipo, escopo, 
                                                                instituicoes_selecionadas[0], unidades_selecionadas[0])
                     st.plotly_chart(fig_timeline_unidade, use_container_width=True)
             
