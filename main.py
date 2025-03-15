@@ -292,8 +292,8 @@ def main():
     # Include "Todos" as an option for each filter
     instituicoes = ['Todos'] + sorted(df['Instituição'].unique().tolist())
     unidades = ['Todos'] + sorted(df['Unidade'].unique().tolist())
-    escopos = sorted(df['Escopo da Inconsistência'].unique().tolist())
-
+    #escopos = sorted(df['Escopo da Inconsistência'].unique().tolist())
+    escopos = ['Curso','Ciclo','Matrícula']
     # Filter for the processing date range
     min_date = pd.to_datetime(df['Data do Processamento']).min().date()
     max_date = pd.to_datetime(df['Data do Processamento']).max().date()
