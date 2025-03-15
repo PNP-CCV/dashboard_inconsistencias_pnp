@@ -155,8 +155,8 @@ def create_progress_chart(data, entity_type, cores_por_tipo, escopo_filter=None)
     
    
     # Ordena por total (maior para o menor)
-    pivot_df = pivot_df.sort_values('Total', ascending=False)
-    
+    #pivot_df = pivot_df.sort_values('Total', ascending=False)
+    pivot_df = pivot_df.sort_values('Instituição',ascending=False) #Ajustado para ordem alfabética.
     # Cria gráfico de barras horizontais empilhadas
     fig = go.Figure()
     
